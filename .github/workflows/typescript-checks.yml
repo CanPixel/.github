@@ -35,22 +35,22 @@ jobs:
         with:
           filters: |
             code:
-              - '**/*.ts'
-              - '**/*.tsx'
-              - '**/*.js'
-              - '**/*.jsx'
-              - '**/*.mjs'
-              - '**/*.cjs'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'package-lock.json'
-              - 'bun.lock'
-              - 'bun.lockb'
-              - '.prettierrc*'
-              - 'prettier.config.*'
-              - 'tsconfig*.json'
-              - '.eslintrc*'
-              - 'eslint.config.*'
+              - '**/*.{ts,tsx,js,jsx,mjs,cjs}'
+              - '**/package.json'
+              - '**/pnpm-lock.yaml'
+              - '**/package-lock.json'
+              - '**/bun.lock'
+              - '**/bun.lockb'
+              - '**/.prettierrc*'
+              - '**/prettier.config.*'
+              - '**/tsconfig*.json'
+              - '**/.eslintrc*'
+              - '**/eslint.config.*'
+              - '.github/workflows/**'
+
+      - name: Debug changed-files decision
+        run: |
+          echo "code=${{ steps.changes.outputs.code }}"
 
       - name: Stop early if no relevant changes
         if: steps.changes.outputs.code != 'true'
