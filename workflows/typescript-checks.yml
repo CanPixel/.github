@@ -1,0 +1,156 @@
+name: Reusable TypeScript Checks
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "20"
+      package-manager:
+        type: string
+        default: "auto" # auto | bun | pnpm | npm
+      run-lint:
+        type: boolean
+        default: true
+      run-tsc:
+        type: boolean
+        default: true
+      run-prettier:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect relevant file changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.js'
+              - '**/*.jsx'
+              - '**/*.mjs'
+              - '**/*.cjs'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'package-lock.json'
+              - 'bun.lock'
+              - 'bun.lockb'
+              - '.prettierrc*'
+              - 'prettier.config.*'
+              - 'tsconfig*.json'
+              - '.eslintrc*'
+              - 'eslint.config.*'
+
+      - name: Stop early if no relevant changes
+        if: steps.changes.outputs.code != 'true'
+        run: echo "No TS/JS/tooling changes detected; skipping checks."
+
+      - name: Resolve package manager
+        if: steps.changes.outputs.code == 'true'
+        id: pm
+        shell: bash
+        run: |
+          set -euo pipefail
+          pm="${{ inputs.package-manager }}"
+          if [ "$pm" = "auto" ]; then
+            if [ -f bun.lockb ] || [ -f bun.lock ]; then
+              pm="bun"
+            elif [ -f pnpm-lock.yaml ]; then
+              pm="pnpm"
+            elif [ -f package-lock.json ]; then
+              pm="npm"
+            else
+              echo "No supported lockfile found." >&2
+              exit 1
+            fi
+          fi
+          echo "value=$pm" >> "$GITHUB_OUTPUT"
+          echo "Using package manager: $pm"
+
+      # setup-node provides npm/pnpm cache
+      - name: Setup Node (npm cache)
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'npm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Node (pnpm cache)
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'pnpm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # Bun strategy: cache Bun install cache + node_modules
+      - name: Setup Bun
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'bun'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun dependencies
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies (npm)
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'npm'
+        run: npm ci
+
+      - name: Install dependencies (pnpm)
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (bun)
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'bun'
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        if: steps.changes.outputs.code == 'true' && inputs.run-lint
+        run: |
+          case "${{ steps.pm.outputs.value }}" in
+            bun) bun run lint ;;
+            pnpm) pnpm run lint ;;
+            npm) npm run lint ;;
+          esac
+
+      - name: TypeScript compile
+        if: steps.changes.outputs.code == 'true' && inputs.run-tsc
+        run: |
+          case "${{ steps.pm.outputs.value }}" in
+            bun) bun run tsc --noEmit ;;
+            pnpm) pnpm run tsc --noEmit ;;
+            npm) npm run tsc --noEmit ;;
+          esac
+
+      - name: Prettier check
+        if: steps.changes.outputs.code == 'true' && inputs.run-prettier
+        run: |
+          case "${{ steps.pm.outputs.value }}" in
+            bun) bunx prettier --check . ;;
+            pnpm) pnpm exec prettier --check . ;;
+            npm) npx prettier --check . ;;
+          esac
