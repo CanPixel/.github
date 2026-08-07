@@ -54,7 +54,17 @@ jobs:
 
       - name: Stop early if no relevant changes
         if: steps.changes.outputs.code != 'true'
-        run: echo "No TS/JS/tooling changes detected; skipping checks."
+        run: 
+          echo "No TS/JS/tooling changes detected; skipping checks."
+
+      - name: Verify git hooks path configured
+        if: steps.changes.outputs.code == 'true'
+        shell: bash
+        run: |
+          if [ ! -f ".githooks/pre-push" ]; then
+            echo "::warning::No .githooks/pre-push found in this repo."
+            echo "::warning::Developers won't be blocked locally before pushing."
+          fi
 
       - name: Resolve package manager
         if: steps.changes.outputs.code == 'true'
