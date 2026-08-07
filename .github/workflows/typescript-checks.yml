@@ -20,7 +20,7 @@ on:
         default: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: read
 
 jobs:
@@ -147,11 +147,20 @@ jobs:
             npm) npm run tsc --noEmit ;;
           esac
 
-      - name: Prettier check
+      - name: Prettier fixes
         if: steps.changes.outputs.code == 'true' && inputs.run-prettier
         run: |
           case "${{ steps.pm.outputs.value }}" in
-            bun) bunx prettier --check . ;;
-            pnpm) pnpm exec prettier --check . ;;
-            npm) npx prettier --check . ;;
+            bun) bunx prettier --write . ;;
+            pnpm) pnpm exec prettier --write . ;;
+            npm) npx prettier --write . ;;
           esac
+
+      - name: Commit formatting fixes
+        if: steps.changes.outputs.code == 'true' && inputs.run-prettier
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-fix prettier formatting [skip ci]"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"
+          skip_dirty_check: false
