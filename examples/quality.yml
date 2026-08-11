@@ -19,7 +19,11 @@ jobs:
     secrets: inherit
     with:
       package-manager: auto
-      node-version: "20"
+      # Must be >=22.13: package.json pins pnpm 11 via "packageManager", and
+      # pnpm 11 requires node:sqlite, which does not exist before Node 22.13.
+      # On Node 20 pnpm dies with ERR_UNKNOWN_BUILTIN_MODULE before it can
+      # install anything. 24 matches the version used locally.
+      node-version: "24"
       run-lint: true
       run-tsc: true
       run-prettier: true
