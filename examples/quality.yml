@@ -1,0 +1,25 @@
+name: Quality
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+  push:
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  ts-checks:
+    uses: CanPixel/.github/.github/workflows/typescript-checks.yml@main
+    secrets: inherit
+    with:
+      package-manager: auto
+      node-version: "20"
+      run-lint: true
+      run-tsc: true
+      run-prettier: true
