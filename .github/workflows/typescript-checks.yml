@@ -9,6 +9,11 @@ on:
       package-manager:
         type: string
         default: "auto" # auto | bun | pnpm | npm
+      pnpm-version:
+        # Leave empty to let pnpm/action-setup read the "packageManager" field
+        # from package.json. Only set this for repos that have no such field.
+        type: string
+        default: ""
       run-lint:
         type: boolean
         default: true
@@ -49,13 +54,11 @@ jobs:
               - '.github/workflows/**'
 
       - name: Debug changed-files decision
-        run: |
-          echo "code=${{ steps.changes.outputs.code }}"
+        run: echo "code=${{ steps.changes.outputs.code }}"
 
       - name: Stop early if no relevant changes
         if: steps.changes.outputs.code != 'true'
-        run: 
-          echo "No TS/JS/tooling changes detected; skipping checks."
+        run: echo "No TS/JS/tooling changes detected; skipping checks."
 
       - name: Verify git hooks path configured
         if: steps.changes.outputs.code == 'true'
@@ -87,6 +90,21 @@ jobs:
           fi
           echo "value=$pm" >> "$GITHUB_OUTPUT"
           echo "Using package manager: $pm"
+
+      # MUST run before actions/setup-node. `cache: pnpm` shells out to
+      # `pnpm store path` to locate the cache directory, so pnpm has to already
+      # be on PATH — otherwise setup-node dies with
+      # "Unable to locate executable file: pnpm".
+      #
+      # No hardcoded `version:` either: pnpm/action-setup@v4 hard-errors when a
+      # version input is given AND package.json has a "packageManager" field
+      # that disagrees with it. Reading packageManager is also what keeps CI on
+      # the same pnpm major the developers use locally.
+      - name: Setup pnpm
+        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'pnpm'
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ inputs.pnpm-version }}
 
       # setup-node provides npm/pnpm cache
       - name: Setup Node (npm cache)
@@ -148,13 +166,27 @@ jobs:
             npm) npm run lint ;;
           esac
 
+      # Was `<pm> run tsc --noEmit`, which fails with "Missing script: tsc" in
+      # every repo that names the script `typecheck`. Prefer the repo's own
+      # script; fall back to invoking the tsc binary directly.
       - name: TypeScript compile
         if: steps.changes.outputs.code == 'true' && inputs.run-tsc
+        shell: bash
         run: |
+          set -euo pipefail
+          has_script() {
+            node -e "const s=require('./package.json').scripts||{}; process.exit(s['$1'] ? 0 : 1)"
+          }
           case "${{ steps.pm.outputs.value }}" in
-            bun) bun run tsc --noEmit ;;
-            pnpm) pnpm run tsc --noEmit ;;
-            npm) npm run tsc --noEmit ;;
+            bun)
+              if has_script typecheck; then bun run typecheck; else bunx tsc --noEmit; fi
+              ;;
+            pnpm)
+              if has_script typecheck; then pnpm run typecheck; else pnpm exec tsc --noEmit; fi
+              ;;
+            npm)
+              if has_script typecheck; then npm run typecheck; else npx tsc --noEmit; fi
+              ;;
           esac
 
       - name: Ensure .prettierignore exists
@@ -184,7 +216,11 @@ jobs:
           esac
 
       - name: Commit formatting fixes
-        if: steps.changes.outputs.code == 'true' && inputs.run-prettier
+        # Skipped on pull_request: the checkout is a detached merge commit, so
+        # there is no branch to push back to.
+        if: >-
+          steps.changes.outputs.code == 'true' && inputs.run-prettier &&
+          github.event_name != 'pull_request'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: auto-fix prettier formatting [skip ci]"
