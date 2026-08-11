@@ -43,11 +43,22 @@ jobs:
               - '**/*.{ts,tsx,js,jsx,mjs,cjs}'
               - '**/package.json'
               - '**/pnpm-lock.yaml'
+              # Holds pnpm's overrides/auditConfig as of pnpm 11, so it decides
+              # what actually gets installed — a change here can alter the whole
+              # dependency tree without touching package.json.
+              - '**/pnpm-workspace.yaml'
               - '**/package-lock.json'
               - '**/bun.lock'
               - '**/bun.lockb'
+              # Covers .prettierrc, .prettierrc.json, .prettierrc.mjs, ...
               - '**/.prettierrc*'
+              # Covers prettier.config.js/.mjs/.cjs/.ts. The '**/' prefix also
+              # matches at repo root, since ** matches zero path segments.
               - '**/prettier.config.*'
+              # Decides which files the prettier step touches at all.
+              - '**/.prettierignore'
+              # Prettier reads it for indentation defaults.
+              - '**/.editorconfig'
               - '**/tsconfig*.json'
               - '**/.eslintrc*'
               - '**/eslint.config.*'
@@ -122,12 +133,6 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-
-      - name: Setup pnpm
-        if: steps.changes.outputs.code == 'true' && steps.pm.outputs.value == 'pnpm'
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       # Bun strategy: cache Bun install cache + node_modules
       - name: Setup Bun
