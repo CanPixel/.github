@@ -6,8 +6,7 @@ on:
       - '**/*.md'
   push:
     branches:
-      - master
-      - main
+      - $default-branch
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:
