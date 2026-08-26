@@ -1,0 +1,14 @@
+{
+  "name": "CanPixel TypeScript Quality",
+  "description": "Runs shared linting, TypeScript, and Prettier checks for Bun, pnpm, and npm projects.",
+  "iconName": "octicon check-circle",
+  "categories": [
+    "Code Quality",
+    "TypeScript",
+    "JavaScript"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "(bun\\.lock|bun\\.lockb|pnpm-lock\\.yaml|package-lock\\.json)$"
+  ]
+}
