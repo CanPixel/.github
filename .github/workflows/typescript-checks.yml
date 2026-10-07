@@ -23,6 +23,12 @@ on:
       run-prettier:
         type: boolean
         default: true
+      prettier-autofix:
+        # Push formatting fixes back to the branch instead of failing the check.
+        # Never pushes to the default branch: protected branches only accept
+        # pull requests, so the push would be rejected and fail the run.
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -211,8 +217,19 @@ jobs:
             echo ".prettierignore already exists, skipping."
           fi
 
+      # Default: verify formatting only. Unformatted code fails the check on the
+      # pull request, before it can reach a protected branch.
+      - name: Prettier check
+        if: steps.changes.outputs.code == 'true' && inputs.run-prettier && !inputs.prettier-autofix
+        run: |
+          case "${{ steps.pm.outputs.value }}" in
+            bun) bunx prettier --check . ;;
+            pnpm) pnpm exec prettier --check . ;;
+            npm) npx prettier --check . ;;
+          esac
+
       - name: Prettier fixes
-        if: steps.changes.outputs.code == 'true' && inputs.run-prettier
+        if: steps.changes.outputs.code == 'true' && inputs.run-prettier && inputs.prettier-autofix
         run: |
           case "${{ steps.pm.outputs.value }}" in
             bun) bunx prettier --write . ;;
@@ -221,11 +238,14 @@ jobs:
           esac
 
       - name: Commit formatting fixes
-        # Skipped on pull_request: the checkout is a detached merge commit, so
-        # there is no branch to push back to.
+        # Skipped on pull_request (the checkout is a detached merge commit, so
+        # there is no branch to push back to) and on the default branch
+        # (protected: changes must arrive through a pull request).
         if: >-
           steps.changes.outputs.code == 'true' && inputs.run-prettier &&
-          github.event_name != 'pull_request'
+          inputs.prettier-autofix &&
+          github.event_name != 'pull_request' &&
+          github.ref_name != github.event.repository.default_branch
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "style: auto-fix prettier formatting [skip ci]"
